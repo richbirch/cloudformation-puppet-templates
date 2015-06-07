@@ -20,11 +20,6 @@
             "Description" : "The dns name used by puppet client nodes to connect to this master",
             "Type" : "String"
         },
-        "ContentManifest" : {
-            "Default" : "/wordpress/: { include wordpress }",
-            "Description" : "Manifest of roles to add to nodes.pp",
-            "Type" : "String"
-        },
         "PuppetManifest" : {
             "Description" : "Location of package (Zip, GZIP or Git repository URL) that includes the puppet manifest",
             "Type" : "String"
