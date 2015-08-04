@@ -16,7 +16,7 @@
             "Type" : "String"
         },
         "DNSName" : {
-            "Default" : "puppet",
+            "Default" : "ci-master",
             "Description" : "The dns name used by puppet client nodes to connect to this master",
             "Type" : "String"
         },
@@ -148,7 +148,8 @@
             },
             "Properties" : {
                 "InstanceType" : { "Ref" : "InstanceType" },
-                "SecurityGroups" : [ { "Ref" : "PuppetGroup" } ],
+                "SecurityGroupIds" : [ { "Fn::GetAtt" : [ "PuppetGroup", "GroupId" ] } ],
+                "SubnetId" : { "Ref" : "DefaultSubnet" },
                 "ImageId" : {
                     "Fn::FindInMap" : [
                         "AWSRegionArch2AMI",
@@ -180,10 +181,64 @@
             } 
         },
 
+        "InternetGateway" : {
+            "Type" : "AWS::EC2::InternetGateway"
+        },
+
+        "CiVpc" : {
+            "Type" : "AWS::EC2::VPC",
+            "Properties" : {
+                "CidrBlock" : "10.0.0.0/16",
+                "EnableDnsHostnames" : "true"
+            }
+        },
+
+        "VpcInternetGateway" : {
+            "Type" : "AWS::EC2::VPCGatewayAttachment",
+            "Properties" : {
+                "InternetGatewayId" : { "Ref" : "InternetGateway" },
+                "VpcId" : { "Ref" : "CiVpc" }
+            }
+        },
+
+        "InternetGatewayRouteTable" : {
+            "Type" : "AWS::EC2::RouteTable",
+            "Properties" : {
+                "VpcId" : { "Ref" : "CiVpc" }
+            }
+        },
+
+        "InternetRoute" : {
+            "Type" : "AWS::EC2::Route",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "InternetGatewayRouteTable" },
+                "DestinationCidrBlock" : "0.0.0.0/0",
+                "GatewayId" : { "Ref" : "InternetGateway" }
+            }
+        },
+
+        "DefaultSubnet" : {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "CidrBlock" : "10.0.0.0/16",
+                "VpcId" : { "Ref" : "CiVpc" },
+                "MapPublicIpOnLaunch" : "true"
+            }
+        },
+
+        "SubnetRouteTable" : {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "InternetGatewayRouteTable" },
+                "SubnetId" : { "Ref" : "DefaultSubnet" }
+            }
+        },
+
         "EC2SecurityGroup" : {
             "Type" : "AWS::EC2::SecurityGroup",
             "Properties" : {
-                "GroupDescription" : "Group for clients to communicate with Puppet Master"
+                "GroupDescription" : "Group for clients to communicate with Puppet Master",
+                "VpcId" : { "Ref" : "CiVpc" }
             }
         },
 
@@ -192,9 +247,10 @@
             "Properties" : {
                 "GroupDescription" : "Group for puppet communication",
                 "SecurityGroupIngress" : [
-                    { "IpProtocol" : "tcp", "FromPort" : "8140", "ToPort" : "8140", "SourceSecurityGroupName" : { "Ref" : "EC2SecurityGroup" }},
+                    { "IpProtocol" : "tcp", "FromPort" : "8140", "ToPort" : "8140", "SourceSecurityGroupId" : { "Fn::GetAtt" : [ "EC2SecurityGroup", "GroupId" ] }},
                     { "IpProtocol" : "tcp", "FromPort": "22", "ToPort": "22", "CidrIp": "0.0.0.0/0" }
-                ]
+                ],
+                "VpcId" : { "Ref" : "CiVpc" }
             }
         },
 
@@ -220,6 +276,10 @@
         "PuppetClientSecurityGroup" : {
             "Value" : { "Ref" : "EC2SecurityGroup" },
             "Description" : "Clients of the Puppet Master should be part of this security group"
+        },
+        "CiVpc" : {
+            "Value" : { "Ref" : "CiVpc" },
+            "Description" : "The CI environment VPC for other environments to peer with"
         }
     }
 } 
