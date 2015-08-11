@@ -1,0 +1,104 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+
+    "Description": "Template to bring up Puppet Master instance that can be used to bootstrap and manage Puppet Clients.",
+
+    "Parameters" : {
+        "CidrBlock" : {
+            "Description" : "Cidr block for VPC",
+            "Default" : "10.0.0.0/16",
+            "ConstraintDescription" : "x.x.x.x/y",
+            "Type" : "String"
+        },
+        "WithInternet" : {
+            "Description" : "Whether VPC should have connectivity to the internet",
+            "Default" : "Yes",
+            "ConstraintDescription" : "Yes or No",
+            "AllowedValues" : [ "Yes", "No" ],
+            "Type" : "String"
+        },
+        "PeerWith" : {
+            "Description" : "Create a VpcPeeringConnection with given Vpc",
+            "Default" : "No",
+            "ConstraintDescription" : "VpcId or 'No'",
+            "Type" : "String"
+        }
+    },
+
+    "Conditions" : {
+        "WithInternetCondition" : {
+            "Fn::Equals" : [{ "Ref" : "WithInternet" }, "Yes" ]
+        },
+        "CreatePeeringConnection" : {
+            "Fn::Not" : [
+                { "Fn::Equals" : [ { "Ref" : "PeerWith" }, "No" ] }
+            ]
+        }
+    },
+
+    "Resources" : {
+        "Vpc" : {
+            "Type" : "AWS::EC2::VPC",
+            "Properties" : {
+                "CidrBlock" : { "Ref" : "CidrBlock" },
+                "EnableDnsHostnames" : "true"
+            }
+        },
+
+        "InternetGateway" : {
+            "Type" : "AWS::EC2::InternetGateway",
+            "Condition" : "WithInternetCondition"
+        },
+
+        "VpcInternetGateway" : {
+            "Type" : "AWS::EC2::VPCGatewayAttachment",
+            "Condition" : "WithInternetCondition",
+            "Properties" : {
+                "InternetGatewayId" : { "Ref" : "InternetGateway" },
+                "VpcId" : { "Ref" : "Vpc" }
+            }
+        },
+
+        "VpcRouteTable" : {
+            "Type" : "AWS::EC2::RouteTable",
+            "Properties" : {
+                "VpcId" : { "Ref" : "Vpc" }
+            }
+        },
+
+        "InternetRoute" : {
+            "Type" : "AWS::EC2::Route",
+            "Condition" : "WithInternetCondition",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "VpcRouteTable" },
+                "DestinationCidrBlock" : "0.0.0.0/0",
+                "GatewayId" : { "Ref" : "InternetGateway" }
+            }
+        },
+
+        "VpcPeeringConnection" : {
+            "Type" : "AWS::EC2::VPCPeeringConnection",
+            "Condition" : "CreatePeeringConnection",
+            "Properties" : {
+                "PeerVpcId" : { "Ref" : "PeerWith" },
+                "VpcId" : { "Ref" : "Vpc" }
+            }
+        }
+    },
+
+    "Outputs" : {
+        "VpcWithInternet" : {
+            "Value" : { "Ref" : "Vpc" },
+            "Description" : "Vpc logical ID"
+        },
+        "VpcRouteTable" : {
+            "Value" : { "Ref" : "VpcRouteTable" },
+            "Description" : "Internet gateway route table logical ID"
+        },
+        "VpcPeeringConnection" : {
+            "Value" : { "Ref" : "VpcPeeringConnection" },
+            "Description" : "VpcPeeringConnection logical ID",
+            "Condition" : "CreatePeeringConnection"
+        }
+    }
+}

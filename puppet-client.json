@@ -1,92 +1,35 @@
 {
     "AWSTemplateFormatVersion" : "2010-09-09",
 
-    "Description": "Template to bring up Puppet Master instance that can be used to bootstrap and manage Puppet Clients.",
+    "Description": "Template to bring up Puppet Client instance in separate VPC",
 
     "Parameters" : {
         "InstanceType" : {
-            "Description" : "EC2 instance type for PuppetMaster",
+            "Description" : "EC2 instance type for PuppetClient",
             "Default" : "t1.micro",
             "AllowedValues" : [ "t1.micro", "m1.small", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "c1.medium", "c1.xlarge", "cc1.4xlarge" ],
             "ConstraintDescription" : "must contain only alphanumeric characters.",
             "Type" : "String"
         },
         "KeyName" : {
-            "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the PuppetMaster",
+            "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the PuppetClient",
             "Type" : "String"
         },
-        "DNSName" : {
-            "Default" : "ci-master",
-            "Description" : "The dns name used by puppet client nodes to connect to this master",
+        "PuppetMasterDNSName" : {
+            "Description" : "The dns name used connect to the puppet master",
             "Type" : "String"
         },
-        "PuppetManifest" : {
-            "Description" : "Location of package (Zip, GZIP or Git repository URL) that includes the puppet manifest",
+        "PuppetMasterVpc" : {
+            "Description" : "The VPC that the puppet master resides in",
+            "Type" : "String"
+        },
+        "PuppetMasterCidrBlock" : {
+            "Description" : "The puppet master's VPC cidr block",
             "Type" : "String"
         },
         "BucketUrl" : {
             "Description" : "Bucket url for template location",
             "Type" : "String"
-        },
-        "VpcPeeringConnectionDevEnv" : {
-            "Description" : "Vpc Peering Connection to the Dev environment",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "VpcPeeringConnectionQAEnv" : {
-            "Description" : "Vpc Peering Connection to the QA environment",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "VpcPeeringConnectionStagingEnv" : {
-            "Description" : "Vpc Peering Connection to the Staging environment",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "VpcPeeringConnectionProductionEnv" : {
-            "Description" : "Vpc Peering Connection to the Production environment",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "VpcPeeringConnectionPerformanceTestingEnv" : {
-            "Description" : "Vpc Peering Connection to the Performance testing environment",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "VpcPeeringConnectionPenetrationTestingEnv" : {
-            "Description" : "Vpc Peering Connection to the Penetration testing environment",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "CidrBlockDevEnv" : {
-            "Description" : "Dev environment cidr block",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "CidrBlockQAEnv" : {
-            "Description" : "QA environment cidr block",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "CidrBlockStagingEnv" : {
-            "Description" : "Staging environment cidr block",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "CidrBlockProductionEnv" : {
-            "Description" : "Production environment cidr block",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "CidrBlockPerformanceTestingEnv" : {
-            "Description" : "Performance testing environment cidr block",
-            "Type" : "String",
-            "Default" : "-"
-        },
-        "CidrBlockPenetrationTestingEnv" : {
-            "Description" : "Penetration testing environment cidr block",
-            "Type" : "String",
-            "Default" : "-"
         }
     },
 
@@ -136,7 +79,7 @@
             }
         },
 
-        "PuppetMasterInstance" : {
+        "PuppetClientInstance" : {
             "Type" : "AWS::EC2::Instance",
             "Metadata" : {
                 "AWS::CloudFormation::Init" : {
@@ -154,27 +97,12 @@
                                 "json" : []
                             }
                         },
-                        "sources" : {
-                            "/etc/puppet" : { "Ref" : "PuppetManifest" }
-                        },
                         "files" : {
                             "/etc/yum.repos.d/epel.repo" : {
                                 "source" : "https://s3.amazonaws.com/cloudformation-examples/enable-epel-on-amazon-linux-ami",
                                 "mode" : "000644",
                                 "owner" : "root",
                                 "group" : "root"
-                            },
-                            "/etc/puppet/autosign.conf" : {
-                                "content" : "*.internal\n",
-                                "mode" : "100644",
-                                "owner" : "root",
-                                "group" : "wheel"
-                            },
-                            "/etc/puppet/fileserver.conf" : {
-                                "content" : "[modules]\n allow *.internal\n",
-                                "mode" : "100644",
-                                "owner" : "root",
-                                "group" : "wheel"
                             },
                             "/etc/puppet/puppet.conf" : {
                                 "content" : {
@@ -186,25 +114,16 @@
                                             "    rundir=/var/run/puppet\n",
                                             "    ssldir=$vardir/ssl\n",
                                             "    pluginsync=true\n",
-                                            "    dns_alt_names=", { "Ref" : "DNSName" }, "\n",
                                             "[agent]\n",
                                             "    classfile=$vardir/classes.txt\n",
-                                            "    localconfig=$vardir/localconfig\n"
+                                            "    localconfig=$vardir/localconfig\n",
+                                            "    server=",{ "Ref" : "PuppetMasterDNSName" },"\n"
                                         ]
                                     ]
                                 },
                                 "mode" : "000644",
                                 "owner" : "root",
                                 "group" : "root"
-                            }
-                        },
-                        "services" : {
-                            "sysvinit" : {
-                                "puppetmaster" : {
-                                    "enabled" : "true",
-                                    "ensureRunning" : "true"
-
-                                }
                             }
                         }
                     }
@@ -234,10 +153,10 @@
                             "", [
                                 "#!/bin/bash\n",
                                 "/opt/aws/bin/cfn-init --region ", { "Ref" : "AWS::Region" },
-                                " -s ", { "Ref" : "AWS::StackName" }, " -r PuppetMasterInstance ",
+                                " -s ", { "Ref" : "AWS::StackName" }, " -r PuppetClientInstance ",
                                 " --access-key ", { "Ref" : "CFNKeys" },
                                 " --secret-key ", { "Fn::GetAtt" : ["CFNKeys", "SecretAccessKey"]}, "\n",
-                                "/opt/aws/bin/cfn-signal -e $? '", { "Ref" : "PuppetMasterWaitHandle" }, "'\n"
+                                "/opt/aws/bin/cfn-signal -e $? '", { "Ref" : "PuppetClientWaitHandle" }, "'\n"
                             ]
                         ]
                     }
@@ -252,7 +171,8 @@
                     "Fn::Join" : [ "/", [ { "Ref" : "BucketUrl" }, "vpc.json" ] ]
                 }, 
                 "Parameters" : {
-                    "CidrBlock" : "10.0.0.0/16"
+                    "CidrBlock" : "10.1.0.0/16",
+                    "PeerWith" : { "Ref" : "PuppetMasterVpc" }
                 }
             }
         },
@@ -260,13 +180,22 @@
         "DefaultSubnet" : {
             "Type" : "AWS::EC2::Subnet",
             "Properties" : {
-                "CidrBlock" : "10.0.0.0/16",
+                "CidrBlock" : "10.1.0.0/16",
                 "VpcId" : { "Fn::GetAtt" : [ "Vpc", "Outputs.VpcWithInternet" ] },
                 "MapPublicIpOnLaunch" : "true"
             }
         },
 
-        "SubnetRouteTable" : {
+        "PuppetMasterVpcRoute" : {
+            "Type" : "AWS::EC2::Route",
+            "Properties" : {
+                "RouteTableId" : { "Fn::GetAtt" : [ "Vpc", "Outputs.VpcRouteTable" ] },
+                "DestinationCidrBlock" : "10.0.0.0/16",
+                "VpcPeeringConnectionId" : { "Fn::GetAtt" : [ "Vpc", "Outputs.VpcPeeringConnection" ] }
+            }
+        },
+
+        "SubnetVpcRouteTable" : {
             "Type" : "AWS::EC2::SubnetRouteTableAssociation",
             "Properties" : {
                 "RouteTableId" : { "Fn::GetAtt" : [ "Vpc", "Outputs.VpcRouteTable" ] },
@@ -277,45 +206,36 @@
         "PuppetGroup" : {
             "Type" : "AWS::EC2::SecurityGroup",
             "Properties" : {
-                "GroupDescription" : "Puppet master security group",
+                "GroupDescription" : "Client group for puppet communication",
                 "SecurityGroupIngress" : [
-                    { "IpProtocol" : "tcp", "FromPort" : "8140", "ToPort" : "8140", "CidrIp" : "10.0.0.0/16" },
+                    { "IpProtocol" : "tcp", "FromPort" : "8140", "ToPort" : "8140", "CidrIp" : { "Ref" : "PuppetMasterCidrBlock"} },
                     { "IpProtocol" : "tcp", "FromPort": "22", "ToPort": "22", "CidrIp": "0.0.0.0/0" }
                 ],
                 "VpcId" : { "Fn::GetAtt" : [ "Vpc", "Outputs.VpcWithInternet" ] }
             }
         },
 
-        "PuppetMasterWaitHandle" : {
+        "PuppetClientWaitHandle" : {
             "Type" : "AWS::CloudFormation::WaitConditionHandle"
         },
 
-        "PuppetMasterWaitCondition" : {
+        "PuppetClientWaitCondition" : {
             "Type" : "AWS::CloudFormation::WaitCondition",
-            "DependsOn" : "PuppetMasterInstance",
+            "DependsOn" : "PuppetClientInstance",
             "Properties" : {
-                "Handle" : { "Ref" : "PuppetMasterWaitHandle" },
+                "Handle" : { "Ref" : "PuppetClientWaitHandle" },
                 "Timeout" : "600"
-            }
-        },
-
-        "VpcPeeringConnectionDevEnvRoute" : {
-            "Type" : "AWS::EC2::Route",
-            "Properties" : {
-                "RouteTableId" : { "Fn::GetAtt" : [ "Vpc", "Outputs.VpcRouteTable" ] },
-                "DestinationCidrBlock" : { "Ref" : "CidrBlockDevEnv" },
-                "VpcPeeringConnectionId" : { "Ref" : "VpcPeeringConnectionDevEnv" }
             }
         }
     },
 
     "Outputs" : {
-        "PuppetMasterDNSName" : {
-            "Value" : { "Fn::GetAtt" : [ "PuppetMasterInstance", "PrivateDnsName" ] },
-            "Description" : "DNS Name of PuppetMaster"
+        "PuppetClientDNSName" : {
+            "Value" : { "Fn::GetAtt" : [ "PuppetClientInstance", "PrivateDnsName" ] },
+            "Description" : "DNS Name of PuppetClient"
         },
-        "Vpc" : {
-            "Value" : { "Fn::GetAtt" : [ "Vpc", "Outputs.VpcWithInternet" ] },
+        "PuppetMasterVpc" : {
+            "Value" : { "Ref" : "PuppetMasterVpc" },
             "Description" : "The CI environment VPC for other environments to peer with"
         }
     }
